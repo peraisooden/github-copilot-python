@@ -7,6 +7,39 @@ let startTime = null;
 let timerInterval = null;
 let hintsUsed = 0;
 let gameCompleted = false;
+let themeMode = "light";
+
+function saveThemePreference(mode) {
+    try {
+        localStorage.setItem("sudoku_theme", mode);
+    } catch (error) {
+        console.error("Unable to save theme preference:", error);
+    }
+}
+
+function loadThemePreference() {
+    try {
+        const stored = localStorage.getItem("sudoku_theme");
+        return stored === "dark" ? "dark" : "light";
+    } catch (error) {
+        console.error("Unable to load theme preference:", error);
+        return "light";
+    }
+}
+
+function applyTheme(mode) {
+    themeMode = mode === "dark" ? "dark" : "light";
+    document.documentElement.classList.toggle("dark-mode", themeMode === "dark");
+    const toggleButton = document.getElementById("toggle-theme");
+    if (toggleButton) {
+        toggleButton.textContent = themeMode === "dark" ? "Light Mode" : "Dark Mode";
+    }
+    saveThemePreference(themeMode);
+}
+
+function toggleTheme() {
+    applyTheme(themeMode === "dark" ? "light" : "dark");
+}
 
 
 // ============================================================
@@ -240,7 +273,8 @@ async function checkSolution() {
 
             input.className = "sudoku-cell";
 
-            if (incorrect.has(index)) {
+            const value = input.value.trim();
+            if (incorrect.has(index) && value !== "") {
                 input.className = "sudoku-cell incorrect";
             }
         }
@@ -290,6 +324,67 @@ async function checkSolution() {
             message.innerText =
                 "Unable to check the solution.";
         }
+    }
+}
+
+async function requestHint() {
+    if (gameCompleted) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/hint");
+
+        if (!response.ok) {
+            throw new Error("Unable to get a hint.");
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+            const message = document.getElementById("message");
+            if (message) {
+                message.style.color = "#d32f2f";
+                message.innerText = data.error;
+            }
+            return;
+        }
+
+        fillHintCell(data.row, data.col, data.value);
+    } catch (error) {
+        console.error(error);
+        const message = document.getElementById("message");
+        if (message) {
+            message.style.color = "#d32f2f";
+            message.innerText = "Unable to retrieve a hint.";
+        }
+    }
+}
+
+function fillHintCell(row, col, value) {
+    const boardDiv = document.getElementById("sudoku-board");
+    if (!boardDiv) {
+        return;
+    }
+
+    const inputs = boardDiv.getElementsByTagName("input");
+    const index = row * SIZE + col;
+    const input = inputs[index];
+
+    if (!input || input.disabled) {
+        return;
+    }
+
+    input.value = value;
+    input.disabled = true;
+    input.className = "sudoku-cell prefilled";
+    hintsUsed += 1;
+    puzzle[row][col] = value;
+
+    const message = document.getElementById("message");
+    if (message) {
+        message.style.color = "#000";
+        message.innerText = `Hint used: ${hintsUsed}`;
     }
 }
 
@@ -874,9 +969,19 @@ window.addEventListener(
                 "check-solution"
             );
 
+        const hintButton =
+            document.getElementById(
+                "hint-button"
+            );
+
         const leaderboardButton =
             document.getElementById(
                 "show-leaderboard"
+            );
+
+        const toggleThemeButton =
+            document.getElementById(
+                "toggle-theme"
             );
 
         const closeLeaderboardButton =
@@ -910,6 +1015,26 @@ window.addEventListener(
         }
 
 
+        // Hint button
+        if (hintButton) {
+
+            hintButton.addEventListener(
+                "click",
+                requestHint
+            );
+        }
+
+
+        // Toggle Theme
+        if (toggleThemeButton) {
+
+            toggleThemeButton.addEventListener(
+                "click",
+                toggleTheme
+            );
+        }
+
+
         // Show Leaderboard
         if (leaderboardButton) {
 
@@ -939,6 +1064,9 @@ window.addEventListener(
             );
         }
 
+
+        // Apply saved theme before rendering
+        applyTheme(loadThemePreference());
 
         // Start the first game
         newGame();
