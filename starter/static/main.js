@@ -1,4 +1,6 @@
-// Client-side rendering and interaction for the Flask-backed Sudoku
+// ============================================================
+// SUDOKU GAME - CLIENT SIDE JAVASCRIPT
+// ============================================================
 
 const SIZE = 9;
 
@@ -8,6 +10,14 @@ let timerInterval = null;
 let hintsUsed = 0;
 let gameCompleted = false;
 let themeMode = "light";
+
+// Keep track of cells already filled using Hint
+let hintedCells = new Set();
+
+
+// ============================================================
+// THEME
+// ============================================================
 
 function saveThemePreference(mode) {
     try {
@@ -29,56 +39,83 @@ function loadThemePreference() {
 
 function applyTheme(mode) {
     themeMode = mode === "dark" ? "dark" : "light";
-    document.documentElement.classList.toggle("dark-mode", themeMode === "dark");
-    const toggleButton = document.getElementById("toggle-theme");
-    if (toggleButton) {
-        toggleButton.textContent = themeMode === "dark" ? "Light Mode" : "Dark Mode";
+
+    document.documentElement.classList.toggle(
+        "dark-mode",
+        themeMode === "dark"
+    );
+
+    const button = document.getElementById("toggle-theme");
+
+    if (button) {
+        button.textContent =
+            themeMode === "dark"
+                ? "Light Mode"
+                : "Dark Mode";
     }
+
     saveThemePreference(themeMode);
 }
 
 function toggleTheme() {
-    applyTheme(themeMode === "dark" ? "light" : "dark");
+    applyTheme(
+        themeMode === "dark"
+            ? "light"
+            : "dark"
+    );
 }
 
 
 // ============================================================
-// CREATE SUDOKU BOARD
+// CREATE BOARD
 // ============================================================
 
 function createBoardElement() {
-    const boardDiv = document.getElementById("sudoku-board");
+    const board = document.getElementById("sudoku-board");
 
-    if (!boardDiv) {
+    if (!board) {
         console.error("Element #sudoku-board not found.");
         return;
     }
 
-    boardDiv.innerHTML = "";
+    board.innerHTML = "";
 
-    for (let i = 0; i < SIZE; i++) {
+    for (let row = 0; row < SIZE; row++) {
+
         const rowDiv = document.createElement("div");
         rowDiv.className = "sudoku-row";
 
-        for (let j = 0; j < SIZE; j++) {
+        for (let col = 0; col < SIZE; col++) {
+
             const input = document.createElement("input");
 
             input.type = "text";
             input.maxLength = 1;
             input.className = "sudoku-cell";
 
-            input.dataset.row = i;
-            input.dataset.col = j;
+            input.dataset.row = row;
+            input.dataset.col = col;
 
-            // Allow only numbers 1-9
-            input.addEventListener("input", function (e) {
-                e.target.value = e.target.value.replace(/[^1-9]/g, "");
+            // Only allow numbers 1-9
+            input.addEventListener("input", function () {
+
+                this.value = this.value.replace(
+                    /[^1-9]/g,
+                    ""
+                );
+
+                // Remove old incorrect marking
+                this.classList.remove("incorrect");
+
+                // If user edits the cell, remove it from hinted cells
+                const key = `${row}-${col}`;
+                hintedCells.delete(key);
             });
 
             rowDiv.appendChild(input);
         }
 
-        boardDiv.appendChild(rowDiv);
+        board.appendChild(rowDiv);
     }
 }
 
@@ -87,31 +124,36 @@ function createBoardElement() {
 // RENDER PUZZLE
 // ============================================================
 
-function renderPuzzle(puz) {
-    puzzle = puz;
+function renderPuzzle(newPuzzle) {
+
+    puzzle = newPuzzle;
 
     createBoardElement();
 
-    const boardDiv = document.getElementById("sudoku-board");
+    const board = document.getElementById("sudoku-board");
 
-    if (!boardDiv) {
+    if (!board) {
         return;
     }
 
-    const inputs = boardDiv.getElementsByTagName("input");
+    const inputs = board.getElementsByTagName("input");
 
-    for (let i = 0; i < SIZE; i++) {
-        for (let j = 0; j < SIZE; j++) {
+    for (let row = 0; row < SIZE; row++) {
 
-            const index = i * SIZE + j;
-            const value = puzzle[i][j];
+        for (let col = 0; col < SIZE; col++) {
+
+            const index = row * SIZE + col;
             const input = inputs[index];
+            const value = puzzle[row][col];
 
             if (value !== 0) {
+
                 input.value = value;
                 input.disabled = true;
                 input.className = "sudoku-cell prefilled";
+
             } else {
+
                 input.value = "";
                 input.disabled = false;
                 input.className = "sudoku-cell";
@@ -128,34 +170,41 @@ function renderPuzzle(puz) {
 async function newGame() {
 
     try {
-        const difficultyElement = document.getElementById("difficulty");
 
-        const clues = parseInt(
-            difficultyElement.value,
-            10
+        const difficulty = document.getElementById("difficulty");
+
+        const clues = difficulty
+            ? parseInt(difficulty.value, 10)
+            : 35;
+
+        const response = await fetch(
+            `/new?clues=${clues}`
         );
 
-        const response = await fetch(`/new?clues=${clues}`);
-
         if (!response.ok) {
-            throw new Error("Unable to create a new game.");
+            throw new Error("Unable to create new game.");
         }
 
         const data = await response.json();
 
+        if (!data.puzzle) {
+            throw new Error("Puzzle was not returned.");
+        }
+
         renderPuzzle(data.puzzle);
+
+        // Reset game state
+        hintsUsed = 0;
+        hintedCells.clear();
+        gameCompleted = false;
 
         const message = document.getElementById("message");
 
         if (message) {
             message.innerText = "";
+            message.style.color = "#d32f2f";
         }
 
-        // Reset game state
-        hintsUsed = 0;
-        gameCompleted = false;
-
-        // Start timer
         startTimer();
 
     } catch (error) {
@@ -166,9 +215,47 @@ async function newGame() {
 
         if (message) {
             message.style.color = "#d32f2f";
-            message.innerText = "Unable to start a new game.";
+            message.innerText =
+                "Unable to start a new game.";
         }
     }
+}
+
+
+// ============================================================
+// GET CURRENT BOARD
+// ============================================================
+
+function getCurrentBoard() {
+
+    const board = document.getElementById("sudoku-board");
+
+    if (!board) {
+        return null;
+    }
+
+    const inputs = board.getElementsByTagName("input");
+
+    const currentBoard = [];
+
+    for (let row = 0; row < SIZE; row++) {
+
+        currentBoard[row] = [];
+
+        for (let col = 0; col < SIZE; col++) {
+
+            const index = row * SIZE + col;
+
+            const value = inputs[index].value.trim();
+
+            currentBoard[row][col] =
+                value === ""
+                    ? 0
+                    : parseInt(value, 10);
+        }
+    }
+
+    return currentBoard;
 }
 
 
@@ -182,60 +269,58 @@ async function checkSolution() {
         return;
     }
 
-    const boardDiv = document.getElementById("sudoku-board");
+    const board = document.getElementById("sudoku-board");
 
-    if (!boardDiv) {
+    if (!board) {
         return;
     }
 
-    const inputs = boardDiv.getElementsByTagName("input");
+    const inputs = board.getElementsByTagName("input");
 
-    const board = [];
+    const currentBoard = getCurrentBoard();
 
-    for (let i = 0; i < SIZE; i++) {
-
-        board[i] = [];
-
-        for (let j = 0; j < SIZE; j++) {
-
-            const index = i * SIZE + j;
-
-            const value = inputs[index].value;
-
-            board[i][j] = value
-                ? parseInt(value, 10)
-                : 0;
-        }
+    if (!currentBoard) {
+        return;
     }
 
+    const message = document.getElementById("message");
+
+    // --------------------------------------------------------
+    // IMPORTANT:
+    // Check for EMPTY CELLS first.
+    // An incomplete board must NEVER show Congratulations.
+    // --------------------------------------------------------
+
+    let emptyCells = 0;
+
+    for (let row = 0; row < SIZE; row++) {
+
+        for (let col = 0; col < SIZE; col++) {
+
+            if (currentBoard[row][col] === 0) {
+                emptyCells++;
+            }
+        }
+    }
 
     try {
 
         const response = await fetch("/check", {
-
             method: "POST",
-
             headers: {
                 "Content-Type": "application/json"
             },
-
             body: JSON.stringify({
-                board: board
+                board: currentBoard
             })
         });
-
 
         if (!response.ok) {
             throw new Error("Unable to check solution.");
         }
 
-
         const data = await response.json();
 
-        const message = document.getElementById("message");
-
-
-        // Server returned an error
         if (data.error) {
 
             if (message) {
@@ -246,72 +331,202 @@ async function checkSolution() {
             return;
         }
 
+        // ----------------------------------------------------
+        // Get incorrect cells from server
+        // ----------------------------------------------------
 
-        // Store incorrect cells
         const incorrect = new Set();
 
         if (Array.isArray(data.incorrect)) {
 
-            data.incorrect.forEach(function (position) {
+            data.incorrect.forEach(position => {
 
-                const row = position[0];
-                const col = position[1];
+                if (
+                    Array.isArray(position) &&
+                    position.length >= 2
+                ) {
 
-                incorrect.add(row * SIZE + col);
+                    const row = Number(position[0]);
+                    const col = Number(position[1]);
+
+                    if (
+                        row >= 0 &&
+                        row < SIZE &&
+                        col >= 0 &&
+                        col < SIZE
+                    ) {
+
+                        incorrect.add(
+                            row * SIZE + col
+                        );
+                    }
+                }
             });
         }
 
+        // ----------------------------------------------------
+        // Clear previous incorrect highlighting
+        // ----------------------------------------------------
 
-        // Highlight incorrect cells
         for (let index = 0; index < inputs.length; index++) {
 
             const input = inputs[index];
 
+            input.classList.remove("incorrect");
+
+            // Never highlight prefilled cells
             if (input.disabled) {
                 continue;
             }
 
-            input.className = "sudoku-cell";
-
             const value = input.value.trim();
-            if (incorrect.has(index) && value !== "") {
-                input.className = "sudoku-cell incorrect";
+
+            // Highlight only cells:
+            // 1. Reported incorrect by server
+            // 2. Actually contain a value
+            if (
+                incorrect.has(index) &&
+                value !== ""
+            ) {
+
+                input.classList.add("incorrect");
             }
         }
 
+        // ----------------------------------------------------
+        // INCOMPLETE BOARD
+        // ----------------------------------------------------
 
-        // ====================================================
-        // CORRECT SOLUTION
-        // ====================================================
-
-        if (incorrect.size === 0) {
-
-            gameCompleted = true;
-
-            stopTimer();
+        if (emptyCells > 0) {
 
             if (message) {
-                message.style.color = "#388e3c";
+                message.style.color = "#d32f2f";
                 message.innerText =
-                    "Congratulations! You solved it!";
+                    `Please fill all cells. ${emptyCells} cell(s) remaining.`;
             }
 
-            showNameModal();
-
+            return;
         }
 
-        // ====================================================
-        // INCORRECT SOLUTION
-        // ====================================================
+        // ----------------------------------------------------
+        // WRONG COMPLETED BOARD
+        // ----------------------------------------------------
 
-        else {
+        if (incorrect.size > 0) {
 
             if (message) {
                 message.style.color = "#d32f2f";
                 message.innerText =
                     "Some cells are incorrect.";
             }
+
+            return;
         }
+
+        // ----------------------------------------------------
+        // CORRECT COMPLETED BOARD
+        // ----------------------------------------------------
+
+        gameCompleted = true;
+
+        stopTimer();
+
+        if (message) {
+            message.style.color = "#388e3c";
+            message.innerText =
+                "Congratulations! You solved it!";
+        }
+
+        showNameModal();
+
+    } catch (error) {
+
+        console.error(error);
+
+        if (message) {
+            message.style.color = "#d32f2f";
+            message.innerText =
+                "Unable to check the solution.";
+        }
+    }
+}
+
+
+// ============================================================
+// HINT
+// ============================================================
+
+async function requestHint() {
+
+    if (gameCompleted) {
+        return;
+    }
+
+    try {
+
+        // Send cells that already received hints.
+        // app.py should use this list to choose another cell.
+        const excluded = Array.from(hintedCells).join(",");
+
+        const url =
+            excluded.length > 0
+                ? `/hint?exclude=${encodeURIComponent(excluded)}`
+                : "/hint";
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Unable to get hint.");
+        }
+
+        const data = await response.json();
+
+        const message = document.getElementById("message");
+
+        if (data.error) {
+
+            if (message) {
+                message.style.color = "#d32f2f";
+                message.innerText = data.error;
+            }
+
+            return;
+        }
+
+        if (
+            data.row === undefined ||
+            data.col === undefined ||
+            data.value === undefined
+        ) {
+
+            if (message) {
+                message.style.color = "#d32f2f";
+                message.innerText =
+                    "Invalid hint received.";
+            }
+
+            return;
+        }
+
+        const key = `${data.row}-${data.col}`;
+
+        // Make sure we don't use the same hint twice
+        if (hintedCells.has(key)) {
+
+            if (message) {
+                message.style.color = "#d32f2f";
+                message.innerText =
+                    "Please try the Hint button again.";
+            }
+
+            return;
+        }
+
+        fillHintCell(
+            Number(data.row),
+            Number(data.col),
+            Number(data.value)
+        );
 
     } catch (error) {
 
@@ -322,53 +537,37 @@ async function checkSolution() {
         if (message) {
             message.style.color = "#d32f2f";
             message.innerText =
-                "Unable to check the solution.";
+                "Unable to retrieve a hint.";
         }
     }
 }
 
-async function requestHint() {
-    if (gameCompleted) {
-        return;
-    }
 
-    try {
-        const response = await fetch("/hint");
-
-        if (!response.ok) {
-            throw new Error("Unable to get a hint.");
-        }
-
-        const data = await response.json();
-
-        if (data.error) {
-            const message = document.getElementById("message");
-            if (message) {
-                message.style.color = "#d32f2f";
-                message.innerText = data.error;
-            }
-            return;
-        }
-
-        fillHintCell(data.row, data.col, data.value);
-    } catch (error) {
-        console.error(error);
-        const message = document.getElementById("message");
-        if (message) {
-            message.style.color = "#d32f2f";
-            message.innerText = "Unable to retrieve a hint.";
-        }
-    }
-}
+// ============================================================
+// FILL HINT CELL
+// ============================================================
 
 function fillHintCell(row, col, value) {
-    const boardDiv = document.getElementById("sudoku-board");
-    if (!boardDiv) {
+
+    if (
+        row < 0 ||
+        row >= SIZE ||
+        col < 0 ||
+        col >= SIZE
+    ) {
         return;
     }
 
-    const inputs = boardDiv.getElementsByTagName("input");
+    const board = document.getElementById("sudoku-board");
+
+    if (!board) {
+        return;
+    }
+
+    const inputs = board.getElementsByTagName("input");
+
     const index = row * SIZE + col;
+
     const input = inputs[index];
 
     if (!input || input.disabled) {
@@ -376,15 +575,28 @@ function fillHintCell(row, col, value) {
     }
 
     input.value = value;
+
+    // Make hinted cell behave like a prefilled cell
     input.disabled = true;
     input.className = "sudoku-cell prefilled";
-    hintsUsed += 1;
-    puzzle[row][col] = value;
+
+    const key = `${row}-${col}`;
+
+    hintedCells.add(key);
+
+    hintsUsed++;
+
+    // Update local puzzle
+    if (puzzle[row]) {
+        puzzle[row][col] = value;
+    }
 
     const message = document.getElementById("message");
+
     if (message) {
-        message.style.color = "#000";
-        message.innerText = `Hint used: ${hintsUsed}`;
+        message.style.color = "#333";
+        message.innerText =
+            `Hint used: ${hintsUsed}`;
     }
 }
 
@@ -399,15 +611,13 @@ function startTimer() {
 
     startTime = Date.now();
 
-    const timerElement =
-        document.getElementById("timer");
+    const timer = document.getElementById("timer");
 
-    if (timerElement) {
-        timerElement.innerText = "00:00";
+    if (timer) {
+        timer.innerText = "00:00";
     }
 
-
-    timerInterval = setInterval(function () {
+    timerInterval = setInterval(() => {
 
         if (!startTime) {
             return;
@@ -418,7 +628,7 @@ function startTimer() {
                 (Date.now() - startTime) / 1000
             );
 
-        if (timerElement) {
+        if (timer) {
 
             const minutes =
                 String(
@@ -430,17 +640,12 @@ function startTimer() {
                     elapsedSeconds % 60
                 ).padStart(2, "0");
 
-            timerElement.innerText =
+            timer.innerText =
                 `${minutes}:${seconds}`;
         }
 
     }, 500);
 }
-
-
-// ============================================================
-// STOP TIMER
-// ============================================================
 
 function stopTimer() {
 
@@ -452,11 +657,6 @@ function stopTimer() {
     }
 }
 
-
-// ============================================================
-// GET ELAPSED TIME
-// ============================================================
-
 function getElapsedSeconds() {
 
     if (!startTime) {
@@ -467,11 +667,6 @@ function getElapsedSeconds() {
         (Date.now() - startTime) / 1000
     );
 }
-
-
-// ============================================================
-// FORMAT TIME
-// ============================================================
 
 function formatTime(seconds) {
 
@@ -498,8 +693,6 @@ function showNameModal() {
     let modal =
         document.getElementById("name-modal");
 
-
-    // Create modal if it does not already exist
     if (!modal) {
 
         modal = document.createElement("div");
@@ -525,18 +718,15 @@ function showNameModal() {
                 >
 
                 <div class="name-modal-buttons">
-
                     <button id="save-score">
                         Save Score
                     </button>
-
                 </div>
 
             </div>
         `;
 
         document.body.appendChild(modal);
-
 
         // Basic modal styling
         modal.style.position = "fixed";
@@ -551,16 +741,16 @@ function showNameModal() {
         modal.style.justifyContent = "center";
         modal.style.zIndex = "9999";
 
-
         const content =
-            modal.querySelector(".name-modal-content");
+            modal.querySelector(
+                ".name-modal-content"
+            );
 
         content.style.backgroundColor = "#ffffff";
         content.style.padding = "30px";
         content.style.borderRadius = "10px";
         content.style.width = "320px";
         content.style.textAlign = "center";
-
 
         const nameInput =
             modal.querySelector("#player-name");
@@ -569,19 +759,16 @@ function showNameModal() {
         nameInput.style.padding = "10px";
         nameInput.style.margin = "15px 0";
 
-
         const saveButton =
             modal.querySelector("#save-score");
 
         saveButton.style.padding = "10px 20px";
         saveButton.style.cursor = "pointer";
 
-
         saveButton.addEventListener(
             "click",
             savePlayerScore
         );
-
 
         nameInput.addEventListener(
             "keydown",
@@ -594,9 +781,7 @@ function showNameModal() {
         );
     }
 
-
     modal.style.display = "flex";
-
 
     const input =
         document.getElementById("player-name");
@@ -605,83 +790,11 @@ function showNameModal() {
 
         input.value = "";
 
-        setTimeout(function () {
+        setTimeout(() => {
             input.focus();
         }, 50);
     }
 }
-
-
-// ============================================================
-// SAVE PLAYER SCORE
-// ============================================================
-
-function savePlayerScore() {
-
-    const nameInput =
-        document.getElementById("player-name");
-
-    let playerName =
-        nameInput ? nameInput.value.trim() : "";
-
-
-    if (!playerName) {
-        playerName = "Player";
-    }
-
-
-    // Limit name length
-    playerName =
-        playerName.substring(0, 30);
-
-
-    const difficultyElement =
-        document.getElementById("difficulty");
-
-
-    let difficulty = "Unknown";
-
-
-    if (
-        difficultyElement &&
-        difficultyElement.selectedOptions.length > 0
-    ) {
-
-        difficulty =
-            difficultyElement
-                .selectedOptions[0]
-                .text;
-    }
-
-
-    const time =
-        getElapsedSeconds();
-
-
-    const entry = {
-
-        name: playerName,
-
-        time: time,
-
-        difficulty: difficulty,
-
-        hints: hintsUsed
-    };
-
-
-    saveScore(entry);
-
-
-    hideNameModal();
-
-    showLeaderboard();
-}
-
-
-// ============================================================
-// HIDE NAME MODAL
-// ============================================================
 
 function hideNameModal() {
 
@@ -695,7 +808,7 @@ function hideNameModal() {
 
 
 // ============================================================
-// LOAD LEADERBOARD
+// LEADERBOARD
 // ============================================================
 
 function loadLeaderboard() {
@@ -728,11 +841,6 @@ function loadLeaderboard() {
     }
 }
 
-
-// ============================================================
-// SAVE LEADERBOARD
-// ============================================================
-
 function saveLeaderboard(list) {
 
     try {
@@ -751,36 +859,72 @@ function saveLeaderboard(list) {
     }
 }
 
-
-// ============================================================
-// SAVE SCORE
-// ============================================================
-
 function saveScore(entry) {
 
-    const list =
-        loadLeaderboard();
+    const list = loadLeaderboard();
 
-
-    // Add new score
     list.push(entry);
 
-
-    // Sort by completion time
-    list.sort(function (a, b) {
-
-        return Number(a.time) -
-               Number(b.time);
-
+    // Fastest time first
+    list.sort((a, b) => {
+        return Number(a.time) - Number(b.time);
     });
 
-
-    // Keep only Top 10
-    const topTen =
-        list.slice(0, 10);
-
+    // Keep top 10
+    const topTen = list.slice(0, 10);
 
     saveLeaderboard(topTen);
+}
+
+function savePlayerScore() {
+
+    const nameInput =
+        document.getElementById("player-name");
+
+    let playerName =
+        nameInput
+            ? nameInput.value.trim()
+            : "";
+
+    if (!playerName) {
+        playerName = "Player";
+    }
+
+    playerName =
+        playerName.substring(0, 30);
+
+    const difficultyElement =
+        document.getElementById("difficulty");
+
+    let difficulty = "Unknown";
+
+    if (
+        difficultyElement &&
+        difficultyElement.selectedOptions.length > 0
+    ) {
+
+        difficulty =
+            difficultyElement
+                .selectedOptions[0]
+                .text;
+    }
+
+    const entry = {
+
+        name: playerName,
+
+        time: getElapsedSeconds(),
+
+        difficulty: difficulty,
+
+        hints: hintsUsed
+    };
+
+    saveScore(entry);
+
+    hideNameModal();
+
+    showLeaderboard();
 }
 
 
@@ -800,7 +944,6 @@ function showLeaderboard() {
             "#leaderboard-table tbody"
         );
 
-
     if (!modal || !tbody) {
 
         console.error(
@@ -810,19 +953,14 @@ function showLeaderboard() {
         return;
     }
 
-
-    const list =
-        loadLeaderboard();
-
+    const list = loadLeaderboard();
 
     tbody.innerHTML = "";
 
-
-    list.forEach(function (item, index) {
+    list.forEach((item, index) => {
 
         const row =
             document.createElement("tr");
-
 
         const rankCell =
             document.createElement("td");
@@ -830,13 +968,11 @@ function showLeaderboard() {
         rankCell.textContent =
             index + 1;
 
-
         const nameCell =
             document.createElement("td");
 
         nameCell.textContent =
             item.name || "Player";
-
 
         const timeCell =
             document.createElement("td");
@@ -846,13 +982,11 @@ function showLeaderboard() {
                 Number(item.time) || 0
             );
 
-
         const difficultyCell =
             document.createElement("td");
 
         difficultyCell.textContent =
             item.difficulty || "Unknown";
-
 
         const hintsCell =
             document.createElement("td");
@@ -860,23 +994,19 @@ function showLeaderboard() {
         hintsCell.textContent =
             Number(item.hints) || 0;
 
-
         row.appendChild(rankCell);
         row.appendChild(nameCell);
         row.appendChild(timeCell);
         row.appendChild(difficultyCell);
         row.appendChild(hintsCell);
 
-
         tbody.appendChild(row);
     });
-
 
     modal.setAttribute(
         "aria-hidden",
         "false"
     );
-
 
     modal.style.display = "flex";
 }
@@ -893,17 +1023,14 @@ function hideLeaderboard() {
             "leaderboard-modal"
         );
 
-
     if (!modal) {
         return;
     }
-
 
     modal.setAttribute(
         "aria-hidden",
         "true"
     );
-
 
     modal.style.display = "none";
 }
@@ -920,34 +1047,15 @@ function clearLeaderboard() {
             "Are you sure you want to clear the leaderboard?"
         );
 
-
     if (!confirmed) {
         return;
     }
-
 
     localStorage.removeItem(
         "sudoku_leaderboard"
     );
 
-
     showLeaderboard();
-}
-
-
-// ============================================================
-// SAFE HTML ESCAPING
-// ============================================================
-
-function escapeHtml(value) {
-
-    const div =
-        document.createElement("div");
-
-    div.textContent =
-        String(value);
-
-    return div.innerHTML;
 }
 
 
@@ -955,120 +1063,127 @@ function escapeHtml(value) {
 // PAGE INITIALIZATION
 // ============================================================
 
-window.addEventListener(
-    "load",
-    function () {
+window.addEventListener("load", function () {
 
-        const newGameButton =
-            document.getElementById(
-                "new-game"
-            );
+    const newGameButton =
+        document.getElementById("new-game");
 
-        const checkButton =
-            document.getElementById(
-                "check-solution"
-            );
+    const checkButton =
+        document.getElementById("check-solution");
 
-        const hintButton =
-            document.getElementById(
-                "hint-button"
-            );
+    const hintButton =
+        document.getElementById("hint-button");
 
-        const leaderboardButton =
-            document.getElementById(
-                "show-leaderboard"
-            );
+    const leaderboardButton =
+        document.getElementById("show-leaderboard");
 
-        const toggleThemeButton =
-            document.getElementById(
-                "toggle-theme"
-            );
+    const toggleThemeButton =
+        document.getElementById("toggle-theme");
 
-        const closeLeaderboardButton =
-            document.getElementById(
-                "close-leaderboard"
-            );
+    const closeLeaderboardButton =
+        document.getElementById("close-leaderboard");
 
-        const clearLeaderboardButton =
-            document.getElementById(
-                "clear-leaderboard"
-            );
+    const clearLeaderboardButton =
+        document.getElementById("clear-leaderboard");
 
 
-        // New Game
-        if (newGameButton) {
+    // --------------------------------------------------------
+    // NEW GAME
+    // --------------------------------------------------------
 
-            newGameButton.addEventListener(
-                "click",
-                newGame
-            );
-        }
+    if (newGameButton) {
 
-
-        // Check Solution
-        if (checkButton) {
-
-            checkButton.addEventListener(
-                "click",
-                checkSolution
-            );
-        }
-
-
-        // Hint button
-        if (hintButton) {
-
-            hintButton.addEventListener(
-                "click",
-                requestHint
-            );
-        }
-
-
-        // Toggle Theme
-        if (toggleThemeButton) {
-
-            toggleThemeButton.addEventListener(
-                "click",
-                toggleTheme
-            );
-        }
-
-
-        // Show Leaderboard
-        if (leaderboardButton) {
-
-            leaderboardButton.addEventListener(
-                "click",
-                showLeaderboard
-            );
-        }
-
-
-        // Close Leaderboard
-        if (closeLeaderboardButton) {
-
-            closeLeaderboardButton.addEventListener(
-                "click",
-                hideLeaderboard
-            );
-        }
-
-
-        // Clear Leaderboard
-        if (clearLeaderboardButton) {
-
-            clearLeaderboardButton.addEventListener(
-                "click",
-                clearLeaderboard
-            );
-        }
-
-
-        // Apply saved theme before rendering
-        applyTheme(loadThemePreference());
-
-        // Start the first game
-        newGame();
+        newGameButton.addEventListener(
+            "click",
+            newGame
+        );
     }
-);
+
+
+    // --------------------------------------------------------
+    // CHECK SOLUTION
+    // --------------------------------------------------------
+
+    if (checkButton) {
+
+        checkButton.addEventListener(
+            "click",
+            checkSolution
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // HINT
+    // --------------------------------------------------------
+
+    if (hintButton) {
+
+        hintButton.addEventListener(
+            "click",
+            requestHint
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // DARK MODE
+    // --------------------------------------------------------
+
+    if (toggleThemeButton) {
+
+        toggleThemeButton.addEventListener(
+            "click",
+            toggleTheme
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // LEADERBOARD
+    // --------------------------------------------------------
+
+    if (leaderboardButton) {
+
+        leaderboardButton.addEventListener(
+            "click",
+            showLeaderboard
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // CLOSE LEADERBOARD
+    // --------------------------------------------------------
+
+    if (closeLeaderboardButton) {
+
+        closeLeaderboardButton.addEventListener(
+            "click",
+            hideLeaderboard
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // CLEAR LEADERBOARD
+    // --------------------------------------------------------
+
+    if (clearLeaderboardButton) {
+
+        clearLeaderboardButton.addEventListener(
+            "click",
+            clearLeaderboard
+        );
+    }
+
+
+    // Apply saved theme
+    applyTheme(
+        loadThemePreference()
+    );
+
+
+    // Start first game
+    newGame();
+});

@@ -1,5 +1,6 @@
 :root {
     color-scheme: light;
+
     --page-bg: #f4f4f4;
     --text-color: #333;
     --board-bg: #fff;
@@ -8,18 +9,25 @@
     --cell-border: #bbb;
     --cell-focus-bg: #e0f7fa;
     --cell-prefilled-bg: #e0e0e0;
+
+    /* Wrong cell */
     --cell-incorrect-bg: #ffcdd2;
+    --cell-incorrect-text: #b71c1c;
+    --cell-incorrect-border: #d32f2f;
+
     --button-bg: #1976d2;
     --button-hover: #1565c0;
     --button-text: #fff;
+
     --modal-bg: #fff;
     --modal-border: #ddd;
-    --modal-overlay: rgba(0,0,0,0.5);
+    --modal-overlay: rgba(0, 0, 0, 0.5);
     --label-color: #333;
 }
 
 .dark-mode {
     color-scheme: dark;
+
     --page-bg: #121212;
     --text-color: #f2f2f2;
     --board-bg: #1f1f1f;
@@ -28,16 +36,23 @@
     --cell-border: #444;
     --cell-focus-bg: #29405a;
     --cell-prefilled-bg: #2b2b2b;
+
+    /* Wrong cell in dark mode */
     --cell-incorrect-bg: #6b2121;
+    --cell-incorrect-text: #ffffff;
+    --cell-incorrect-border: #ff5252;
+
     --button-bg: #335baa;
     --button-hover: #244787;
     --button-text: #ffffff;
+
     --modal-bg: #242424;
     --modal-border: #444;
-    --modal-overlay: rgba(0,0,0,0.75);
+    --modal-overlay: rgba(0, 0, 0, 0.75);
     --label-color: #f2f2f2;
 }
 
+/* Page */
 body {
     font-family: Arial, sans-serif;
     background: var(--page-bg);
@@ -47,23 +62,27 @@ body {
     padding: 0;
 }
 
+/* Heading */
 h1 {
     margin-top: 30px;
     color: var(--text-color);
 }
 
+/* Sudoku board */
 #sudoku-board {
     display: inline-block;
     margin: 30px auto;
     border: 4px solid var(--board-border);
     background: var(--board-bg);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Sudoku row */
 .sudoku-row {
     display: flex;
 }
 
+/* Sudoku cells */
 .sudoku-cell {
     width: 40px;
     height: 40px;
@@ -73,37 +92,61 @@ h1 {
     outline: none;
     background: var(--cell-bg);
     color: var(--text-color);
-    transition: background 0.2s, color 0.2s;
+    transition:
+        background 0.2s,
+        color 0.2s,
+        border 0.2s;
+    box-sizing: border-box;
 }
 
+/* Cell when selected */
 .sudoku-cell:focus {
     background: var(--cell-focus-bg);
 }
 
+/* Pre-filled cells */
 .sudoku-cell.prefilled {
     background: var(--cell-prefilled-bg);
     font-weight: bold;
     color: var(--text-color);
 }
 
+/* =====================================================
+   WRONG / INCORRECT CELL
+   ===================================================== */
+
 .sudoku-cell.incorrect {
-    background: var(--cell-incorrect-bg);
+    background: var(--cell-incorrect-bg) !important;
+    color: var(--cell-incorrect-text) !important;
+    border: 2px solid var(--cell-incorrect-border) !important;
+    font-weight: bold;
 }
 
+/* Keep incorrect styling even when the cell is focused */
+.sudoku-cell.incorrect:focus {
+    background: var(--cell-incorrect-bg) !important;
+    color: var(--cell-incorrect-text) !important;
+    border: 2px solid var(--cell-incorrect-border) !important;
+}
+
+/* Thick vertical borders for 3x3 sections */
 .sudoku-cell:nth-child(3),
 .sudoku-cell:nth-child(6) {
     border-right: 3px solid var(--board-border);
 }
 
+/* Thick horizontal borders for 3x3 sections */
 .sudoku-row:nth-child(3) .sudoku-cell,
 .sudoku-row:nth-child(6) .sudoku-cell {
     border-bottom: 3px solid var(--board-border);
 }
 
+/* Controls */
 .controls {
     margin: 20px auto;
 }
 
+/* Buttons */
 button {
     padding: 8px 18px;
     margin: 0 8px;
@@ -120,6 +163,7 @@ button:hover {
     background: var(--button-hover);
 }
 
+/* Message */
 #message {
     margin-left: 20px;
     font-size: 16px;
@@ -138,7 +182,11 @@ button:hover {
     align-items: center;
     justify-content: center;
 }
-.modal[aria-hidden="false"] { display: flex; }
+
+.modal[aria-hidden="false"] {
+    display: flex;
+}
+
 .modal-content {
     background: var(--modal-bg);
     padding: 20px;
@@ -149,9 +197,32 @@ button:hover {
     border: 1px solid var(--modal-border);
     color: var(--text-color);
 }
-#leaderboard-table { width: 100%; border-collapse: collapse; margin-top: 10px }
-#leaderboard-table th, #leaderboard-table td { padding: 8px; border-bottom: 1px solid var(--modal-border) }
-.modal-actions { text-align: right; margin-top: 12px }
-.modal-actions button { margin-left: 8px }
 
-#timer { margin-left: 12px; font-weight: bold }
+/* Leaderboard table */
+#leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+#leaderboard-table th,
+#leaderboard-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--modal-border);
+}
+
+/* Modal buttons */
+.modal-actions {
+    text-align: right;
+    margin-top: 12px;
+}
+
+.modal-actions button {
+    margin-left: 8px;
+}
+
+/* Timer */
+#timer {
+    margin-left: 12px;
+    font-weight: bold;
+}
